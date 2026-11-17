@@ -1,0 +1,17 @@
+{
+  "note": "Pilot positive and negative controls with documented nuclear genetic codes (NCBI table ids). 'diagnostic' lists the codons whose call proves the known reassignment. 'accession' is a preferred assembly; if it fails, the taxon list is resolved through NCBI Datasets.",
+  "controls": [
+    {"label": "mgen", "taxa": ["Mycoplasmoides genitalium", "Mycoplasma genitalium"], "accession": "GCF_000027325.1", "table": 4, "diagnostic": {"TGA": "W"}, "cap_mb": 8, "role": "main", "group": "bacterium (tiny positive control, also warms the Pfam cache)"},
+    {"label": "scer", "taxa": ["Saccharomyces cerevisiae"], "accession": "GCF_000146045.2", "table": 1, "diagnostic": {}, "cap_mb": 8, "role": "main", "group": "Fungi (standard code)"},
+    {"label": "calb", "taxa": ["Candida albicans"], "accession": "GCF_000182965.3", "table": 12, "diagnostic": {"CTG": "S"}, "cap_mb": 8, "role": "main", "group": "Fungi (CUG-Ser)"},
+    {"label": "ptan", "taxa": ["Pachysolen tannophilus"], "accession": "", "table": 26, "diagnostic": {"CTG": "A"}, "cap_mb": 8, "role": "main", "group": "Fungi (CUG-Ala)"},
+    {"label": "pfal", "taxa": ["Plasmodium falciparum 3D7", "Plasmodium falciparum"], "accession": "", "table": 1, "diagnostic": {}, "cap_mb": 8, "role": "main", "group": "Apicomplexa (standard code, 19% GC)"},
+    {"label": "tthe", "taxa": ["Tetrahymena thermophila SB210", "Tetrahymena thermophila"], "accession": "GCF_000189635.1", "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}, "cap_mb": 8, "role": "main", "group": "Ciliophora (UAR-Gln)"},
+    {"label": "otri", "taxa": ["Oxytricha trifallax"], "accession": "", "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}, "cap_mb": 8, "role": "main", "group": "Ciliophora (UAR-Gln)"},
+    {"label": "eupl", "taxa": ["Euplotes octocarinatus", "Euplotes vannus", "Euplotes crassus", "Euplotes"], "accession": "", "table": 10, "diagnostic": {"TGA": "C"}, "cap_mb": 8, "role": "main", "group": "Ciliophora (UGA-Cys)"},
+    {"label": "bnon", "taxa": ["Blastocrithidia nonstop", "Blastocrithidia"], "accession": "", "table": 31, "diagnostic": {"TAG": "E", "TGA": "W"}, "cap_mb": 8, "role": "main", "group": "Trypanosomatida (all three stops reassigned)"},
+    {"label": "calb_2mb", "taxa": ["Candida albicans"], "accession": "GCF_000182965.3", "table": 12, "diagnostic": {"CTG": "S"}, "cap_mb": 2, "role": "power", "group": "power test"},
+    {"label": "tthe_2mb", "taxa": ["Tetrahymena thermophila SB210", "Tetrahymena thermophila"], "accession": "GCF_000189635.1", "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}, "cap_mb": 2, "role": "power", "group": "power test"}
+  ],
+  "census_groups": ["Sar", "Discoba", "Metamonada", "Amoebozoa", "Haptista", "Cryptophyceae", "Rhodophyta", "Glaucocystophyceae", "Chlorophyta", "Apusozoa", "Ichthyosporea", "Choanoflagellata", "Rotosphaerida", "Ancyromonadida", "CRuMs", "Hemimastigophora", "Provora", "Picozoa", "Telonemia", "Rhodelphea"]
+}
