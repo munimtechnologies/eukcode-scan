@@ -1,0 +1,23 @@
+{
+  "note": "Transcriptome-mode controls (PREREGISTRATION.md addendum A2, registered 2026-11-17 before any TSA data were seen). Each control is resolved by name to its largest non-environmental INSDC TSA set; a name with no TSA set is reported as unresolved, not replaced.",
+  "positive": [
+    {"label": "t_efoc", "taxa": ["Euplotes focardii"], "table": 10, "diagnostic": {"TGA": "C"}},
+    {"label": "t_erai", "taxa": ["Euplotes raikovi"], "table": 10, "diagnostic": {"TGA": "C"}},
+    {"label": "t_tthe", "taxa": ["Tetrahymena thermophila"], "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}},
+    {"label": "t_ptet", "taxa": ["Paramecium tetraurelia"], "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}},
+    {"label": "t_pcau", "taxa": ["Paramecium caudatum"], "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}},
+    {"label": "t_otri", "taxa": ["Oxytricha trifallax"], "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}},
+    {"label": "t_slem", "taxa": ["Stylonychia lemnae"], "table": 6, "diagnostic": {"TAA": "Q", "TAG": "Q"}},
+    {"label": "t_calb", "taxa": ["Candida albicans"], "table": 12, "diagnostic": {"CTG": "S"}}
+  ],
+  "standard": [
+    {"label": "t_crei", "taxa": ["Chlamydomonas reinhardtii"], "table": 1},
+    {"label": "t_ddis", "taxa": ["Dictyostelium discoideum"], "table": 1},
+    {"label": "t_ptri", "taxa": ["Phaeodactylum tricornutum"], "table": 1},
+    {"label": "t_tpse", "taxa": ["Thalassiosira pseudonana"], "table": 1},
+    {"label": "t_pfal", "taxa": ["Plasmodium falciparum"], "table": 1},
+    {"label": "t_tgon", "taxa": ["Toxoplasma gondii"], "table": 1},
+    {"label": "t_ehux", "taxa": ["Gephyrocapsa huxleyi", "Emiliania huxleyi"], "table": 1},
+    {"label": "t_bnat", "taxa": ["Bigelowiella natans"], "table": 1}
+  ]
+}

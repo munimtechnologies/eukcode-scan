@@ -108,3 +108,68 @@ Check 1 uses `--seed 1 --disjoint-from 0` at the cap the species used in the scr
 
 **A1.3 Reporting.** Every screened assembly is reported, with its inferred code, stop-codon
 calls, candidates and errors (`screen_rows.csv`, `candidates.csv`), whatever the outcome.
+
+## Addendum A2 (2026-11-17, v0.3.0): the transcriptome tranche (stage 3)
+
+Registered before any transcriptome sequence was read and before any pilot output was seen.
+Nothing above changes.
+
+**A2.1 Why.** Many protist lineages, especially uncultured cells isolated one at a time, have a
+transcriptome but no genome assembly. Transcripts are mostly coding sequence, so a small sample
+gives Codetta many more aligned codons per megabase than a genome does.
+
+**A2.2 Prior art, which fixes the novelty tiers.** Swart et al. 2016 (Cell 166:691-702)
+screened every transcriptome of the Marine Microbial Eukaryote Transcriptome Sequencing Project
+(MMETSP) for stop-codon reassignments and found no new code outside ciliates in 265 non-ciliate
+species. Heaphy et al. 2016 (Mol Biol Evol 33:2885) examined the MMETSP ciliates. Each species
+therefore gets a tier:
+- `mmetsp`: any of its TSA sets mentions MMETSP (for example the 2021 third-party re-assemblies
+  of MMETSP, prefix HB).
+- `pre2016`: otherwise, if any of its sets was first public before 2016-09-01.
+- `new`: otherwise. These are sets no systematic screen could have seen.
+
+Every tier is screened and reported, with `new` first. A candidate in tier `mmetsp` that is a
+stop-codon change is compared with Swart et al.'s Data S1 before anything else is said.
+
+**A2.3 Scope.** Every INSDC Transcriptome Shotgun Assembly (TSA) set listed by the ENA portal
+API (`result=tsa_set`, `tax_tree(taxid)`) under the stage 2 groups plus Filasterea, Aphelida and
+Breviatea. Environmental (metatranscriptome) sets and sets under 1 Mb are skipped with a reason.
+For each species, a set not derived from MMETSP is preferred, then the largest. NCBI Taxonomy
+gives the expected code. Sequences are downloaded from NCBI GenBank
+(`genbank/tsa/<letter>/tsa.<CODE>.1.fsa_nt.gz`), or from the ENA mirror if that fails. The
+census (`run_tsa.py census`) only reads metadata and may run before the pilot.
+
+**A2.4 Sampling.** Whole transcripts of at least 300 nt with at most 10% N are used. Only the
+longest isoform of each gene is kept (Trinity `..._cN_gN_iN` and `compN_cN_seqN` names). Other
+headers count as one gene each. A seeded shuffle (seed 0) then picks transcripts up to a
+**fixed 2 Mb cap**. Check 1 uses `--seed 1 --disjoint-from 0`, a sample that shares no gene
+with the first one.
+
+**A2.5 Transcriptome pilot and gate.** Before the TSA screen, the controls in
+`tsa_controls.json` are run at the 2 Mb cap. Each control is resolved by name to its largest
+usable TSA set and is never substituted.
+- **P5 (sensitivity):** at least 3 positive controls resolve, and among those, all but at most
+  one call every diagnostic codon as expected. The controls are *Euplotes focardii* and *E.
+  raikovi* (UGA=C), *Tetrahymena thermophila*, *Paramecium tetraurelia*, *P. caudatum*,
+  *Oxytricha trifallax* and *Stylonychia lemnae* (UAA=Q, UAG=Q), and *Candida albicans*
+  (CUG=S).
+- **P6 (specificity):** at least 3 standard-code controls resolve. Across all of them, at most
+  one called codon contradicts table 1. The controls are *Chlamydomonas reinhardtii*,
+  *Dictyostelium discoideum*, *Phaeodactylum tricornutum*, *Thalassiosira pseudonana*,
+  *Plasmodium falciparum*, *Toxoplasma gondii*, *Gephyrocapsa (Emiliania) huxleyi* and
+  *Bigelowiella natans*.
+- The TSA screen starts only if the genome pilot's P1 and P2 hold **and** P5 and P6 hold. If
+  fewer than 3 controls of a kind resolve, that prediction cannot be tested, the TSA screen
+  does not start, and this is reported.
+
+**A2.6 A prediction about the biology.** Swart et al. found no new code in 265 non-ciliate
+MMETSP species. **P7:** in tier `new`, at least 80% of the non-ciliate species that finish
+without error have no candidate at all. If P7 fails, the excess candidates are reported as a
+result, whatever turns out to be their cause (artefact or biology).
+
+**A2.7 Transcriptome-specific checks.** A transcriptome can contain RNA from prey, food
+organisms or symbionts (for example the retained cryptophyte nuclei of *Mesodinium*). Check 2
+therefore also reports the share of the candidate codon's support coming from transcripts
+whose best hit is outside the species' major clade. Check 4 may use a genome assembly of the
+same species or genus from stage 2, or a second TSA set. Every set is reported whatever the
+outcome (`screen_rows.csv`, `candidates.csv`, one JSON record per set).
