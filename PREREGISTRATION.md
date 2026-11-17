@@ -78,3 +78,33 @@ for that species. Every candidate must pass these checks before anything is clai
 Each candidate ends in one of three classes: (a) a known code that NCBI's taxonomy does not yet
 record, (b) an artefact, or (c) an unreported reassignment. Only (c) would be called new.
 Nothing is written to authors or databases until a person has checked the evidence.
+
+## Addendum A1 (2026-11-17, v0.2.0, still before any pilot or screen output was seen)
+
+Added so that the sorting of candidates is fixed before any data exist. Nothing above changes.
+
+**A1.1 Automatic first-pass class.** Each candidate is labelled by `eukcode/known.py`, using a
+catalogue of documented eukaryotic nuclear reassignments compiled on 2026-11-17 from McGowan
+et al. 2024 (PLoS Genet 20:e1011512) and its references, Pánek et al. 2017 (BMC Biol 15:8),
+the 2025 *Blastocrithidia* comparative genomics paper (mBio e00885-25) and the NCBI tables:
+
+- `known_taxon`: the same codon to amino acid change is documented for a taxon in the species'
+  NCBI lineage, or for its genus. Expected to end in class (a).
+- `known_in_clade`: documented in the same major clade (e.g. Ciliophora, Kinetoplastea,
+  Metamonada, Chlorophyta, Rhizaria) but not for this taxon. This could be a new independent
+  origin or a new taxon with a known code. Full checks 1-4 apply.
+- `known_elsewhere`: documented only in another major clade. Full checks 1-4 apply.
+- `unreported_type`: not documented in any eukaryotic nuclear code in the catalogue. Full
+  checks 1-4, plus a manual search of the newest literature before anything is said.
+
+This label is only a first pass. Class (c) still requires checks 1-4 and a manual literature
+check, including the 2025 Current Biology review.
+
+**A1.2 Data handling.** Genomes are downloaded to temporary storage and deleted after sampling.
+Only the Pfam database is cached. Sampling (`fasta.sample_file`) reads each assembly twice
+rather than holding it in memory, and gives exactly the in-memory sample. Assemblies under
+1 Mb or over 3 Gb are listed as skipped, with the reason, and are not silently dropped.
+Check 1 uses `--seed 1 --disjoint-from 0` at the cap the species used in the screen.
+
+**A1.3 Reporting.** Every screened assembly is reported, with its inferred code, stop-codon
+calls, candidates and errors (`screen_rows.csv`, `candidates.csv`), whatever the outcome.
