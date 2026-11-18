@@ -2,7 +2,7 @@
 # eukcode-scan stage 3: the transcriptome (INSDC TSA) tranche.
 # Copyright 2026 MV2 of Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
 # Code written by AI agents working in MV2's name.
-"""Census and screen of protist transcriptome assemblies (PREREGISTRATION.md, addendum A2).
+"""Census, control pilot and screen of protist transcriptome assemblies (PREREGISTRATION.md, A2-A3).
 
   python run_tsa.py census --out-dir /out
       Lists every INSDC TSA set under the screen's protist groups (ENA portal API), keeps one
@@ -10,6 +10,12 @@
       the transcriptome controls (tsa_controls.json), and writes:
       tsa_sets.csv, tsa_species.csv, tsa_skipped.csv, tsa_controls_resolved.csv,
       tsa_census_summary.json. No Codetta is run.
+
+  python run_tsa.py controls --data-dir /data --out-dir /out --cap-mb 2
+      The transcriptome control pilot (A2.5, A3). Resolves each control in tsa_controls.json by
+      name to its largest usable TSA set, runs Codetta on a 2 Mb sample of it, and grades P5 and
+      P6. Writes TSA_PILOT.md, tsa_pilot.json, screen_rows.csv, candidates.csv and one JSON
+      record per set. Needs Codetta (install_codetta.sh); does not need the census.
 
   python run_tsa.py screen --census /work/tsa_species.csv --shard-index 0 --per-shard 12 \\
       --data-dir /data --out-dir /out --cap-mb 2
@@ -91,6 +97,39 @@ def write_csv(path, rows, fields):
 SPECIES_FIELDS = ["group", "accession", "organism", "tax_id", "length", "first_public", "tier", "n_sets",
                   "study_accession", "ncbi_gencode", "lineage", "url", "url_ok", "gz_bytes"]
 SET_FIELDS = ["group"] + tsa.ENA_FIELDS + ["tier", "environmental", "tpa", "mmetsp"]
+CONTROL_FIELDS = ["label", "role", "table", "diagnostic", "accession", "organism", "length", "first_public",
+                  "tier", "ncbi_gencode", "status"]
+
+
+def resolve_control(c, role, min_bp):
+    """Resolve one control (by its taxa names, in order) to its largest usable TSA set.
+
+    Returns (row, species_row_or_None). Never substitutes another taxon (A2.5).
+    """
+    row = {"label": c["label"], "role": role, "table": c["table"],
+           "diagnostic": " ".join("%s=%s" % kv for kv in sorted(c.get("diagnostic", {}).items())),
+           "accession": "", "organism": "", "length": "", "first_public": "", "tier": "",
+           "ncbi_gencode": "", "status": "unresolved"}
+    for name in c["taxa"]:
+        tid = resolve_taxid(name)
+        if tid is None:
+            continue
+        try:
+            picked, _sk = tsa.choose_sets(ena_sets(tid), min_bp=min_bp)
+        except Exception as exc:
+            row["status"] = "ENA error: %s" % str(exc)[:100]
+            continue
+        if not picked:
+            row["status"] = "no usable TSA set"
+            continue
+        best = max(picked, key=lambda r: tsa._int(r.get("base_count")))
+        t = ncbi.taxonomy_lookup([int(best["tax_id"])])
+        srow = tsa.species_row(best, t, role)
+        row.update({k: srow[k] for k in ("accession", "organism", "length", "first_public", "tier",
+                                           "ncbi_gencode")})
+        row["status"] = "resolved"
+        return row, srow
+    return row, None
 
 
 def census(args):
@@ -152,34 +191,10 @@ def census(args):
     ctrl_rows = []
     for role in ("positive", "standard"):
         for c in cfg.get(role, []):
-            row = {"label": c["label"], "role": role, "table": c["table"],
-                   "diagnostic": " ".join("%s=%s" % kv for kv in sorted(c.get("diagnostic", {}).items())),
-                   "accession": "", "organism": "", "length": "", "first_public": "", "tier": "",
-                   "ncbi_gencode": "", "status": "unresolved"}
-            for name in c["taxa"]:
-                tid = resolve_taxid(name)
-                if tid is None:
-                    continue
-                try:
-                    picked, _sk = tsa.choose_sets(ena_sets(tid), min_bp=args.min_bp)
-                except Exception as exc:
-                    row["status"] = "ENA error: %s" % str(exc)[:100]
-                    continue
-                if not picked:
-                    row["status"] = "no usable TSA set"
-                    continue
-                best = max(picked, key=lambda r: tsa._int(r.get("base_count")))
-                t = ncbi.taxonomy_lookup([int(best["tax_id"])])
-                srow = tsa.species_row(best, t, role)
-                row.update({k: srow[k] for k in ("accession", "organism", "length", "first_public", "tier",
-                                                   "ncbi_gencode")})
-                row["status"] = "resolved"
-                break
+            row, _srow = resolve_control(c, role, args.min_bp)
             ctrl_rows.append(row)
             log("control %s: %s %s" % (c["label"], row["status"], row["accession"]))
-    write_csv(os.path.join(args.out_dir, "tsa_controls_resolved.csv"), ctrl_rows,
-              ["label", "role", "table", "diagnostic", "accession", "organism", "length", "first_public",
-               "tier", "ncbi_gencode", "status"])
+    write_csv(os.path.join(args.out_dir, "tsa_controls_resolved.csv"), ctrl_rows, CONTROL_FIELDS)
 
     def count(key):
         out = {}
@@ -213,10 +228,132 @@ def census(args):
     return 0
 
 
-def screen(args):
-    import run_pilot  # needs Codetta; only the screen mode imports these
+# ---------------------------------------------------------------- Codetta on one TSA set
+
+def ensure_resources(run_pilot, codetta_dir, data_dir):
+    """run_pilot.setup_resources under a file lock, so two jobs sharing the Pfam volume never
+    download or unpack it at the same time. A job without the lock (the v0.1 genome pilot) may
+    be downloading: wait while its .part file is still growing."""
+    import fcntl
+    os.makedirs(data_dir, exist_ok=True)
+    with open(os.path.join(data_dir, ".eukcode-pfam.lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            part = os.path.join(data_dir, "Pfam-A_enone.tar.gz.part")
+            waited = 0
+            while os.path.exists(part) and waited < 3600:
+                s0 = os.path.getsize(part)
+                time.sleep(30)
+                waited += 30
+                if not os.path.exists(part) or os.path.getsize(part) == s0:
+                    break
+            if waited:
+                log("waited %d s for another job's Pfam download" % waited)
+            return run_pilot.setup_resources(codetta_dir, data_dir)
+        finally:
+            fcntl.flock(lk, fcntl.LOCK_UN)
+
+
+def screen_set(row, args, res, deadline):
+    """Download, sample and run Codetta on one TSA set. Returns its JSON record (also written)."""
+    import run_pilot
     import run_screen
-    from eukcode import codes, known, shards as shardmod
+    from eukcode import codes, fasta, known, shards as shardmod
+
+    acc = row["accession"].strip()
+    label = run_screen.label_for(acc, args.seed, args.disjoint_from)
+    rec_path = os.path.join(args.out_dir, "species", label + ".json")
+    if os.path.exists(rec_path):
+        with open(rec_path, encoding="utf-8") as fh:
+            old = json.load(fh)
+        if "error" not in old:
+            return old
+    gencode = shardmod.gencode_of(row)
+    rec = {"accession": acc, "label": label, "organism": row.get("organism", ""), "group": row.get("group", ""),
+           "tax_id": row.get("tax_id", ""), "ncbi_gencode": gencode, "lineage": row.get("lineage", ""),
+           "tier": row.get("tier", ""), "data_type": "transcriptome", "seed": args.seed,
+           "disjoint_from": args.disjoint_from}
+    work = os.path.join(args.tmp_dir, label)
+    os.makedirs(work, exist_ok=True)
+    t0 = time.time()
+    try:
+        if deadline - time.time() < 600:
+            raise RuntimeError("time budget reached before download")
+        gz = os.path.join(work, "set.fsa_nt.gz")
+        last = None
+        for u in ([row["url"]] if row.get("url") else []) + tsa.fasta_urls(acc):
+            try:
+                ncbi.http_download(u, gz, timeout=900)
+                rec["source_url"] = u
+                last = None
+                break
+            except Exception as exc:
+                last = exc
+        if last is not None:
+            raise RuntimeError("download failed: %s" % last)
+        rec["gz_bytes"] = os.path.getsize(gz)
+        sample, n_usable = tsa.sample_transcripts(gz, int(args.cap_mb * 1e6), seed=args.seed,
+                                                  disjoint_from=args.disjoint_from, min_len=args.min_len)
+        os.remove(gz)
+        if not sample:
+            raise RuntimeError("no usable transcripts")
+        inp = os.path.join(work, label + ".fna")
+        fasta.write_fasta(sample, inp)
+        rec.update({"cap_mb": args.cap_mb, "transcripts_usable": n_usable, "transcripts_used": len(sample),
+                    "sample_bp": sum(len(s) for _, s in sample), "sample_gc": round(fasta.gc_fraction(sample), 4),
+                    "prep_minutes": round((time.time() - t0) / 60, 2)})
+        del sample
+        remaining = deadline - time.time()
+        if remaining < 300:
+            raise RuntimeError("time budget reached before Codetta")
+        r = run_pilot.run_codetta({"label": label}, {"input_path": inp}, args.codetta_dir, res, args.out_dir,
+                                  work, args.threads, min(remaining, args.per_species_max_min * 60))
+        cands = known.candidates(r["inferred"], gencode, rec["lineage"], rec["organism"])
+        keep = set(c["codon"] for c in cands) | {"TAA", "TAG", "TGA"}
+        rec.update({"inferred": r["inferred"], "best_models": r["best_models"], "codetta_minutes": r["minutes"],
+                    "n_called": codes.called_count(r["inferred"]), "stop_calls": known.stop_calls(r["inferred"]),
+                    "candidates": cands, "top_class": known.most_interesting(cands),
+                    "codon_detail": {k: v for k, v in r["codon_table"].items() if k in keep}})
+        log("%s %s: %s cands=%s (%.1f min)" % (acc, rec["organism"], r["inferred"],
+                                               ",".join("%s=%s/%s" % (c["codon"], c["called"], c["class"]) for c in cands) or "none",
+                                               r["minutes"]))
+    except subprocess.TimeoutExpired:
+        rec["error"] = "codetta timeout"
+    except Exception as exc:
+        rec["error"] = str(exc)[:300]
+        log("%s: error %s" % (acc, rec["error"]))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    rec["wall_minutes"] = round((time.time() - t0) / 60, 2)
+    os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+    with open(rec_path, "w", encoding="utf-8") as fh:
+        json.dump(rec, fh, indent=1)
+    return rec
+
+
+def _codetta_ready(args):
+    hmmscan = os.path.join(args.codetta_dir, "hmmer-3.3.2", "bin", "hmmscan")
+    if not os.path.exists(hmmscan):
+        log("ERROR: Codetta's HMMER build is missing at %s" % hmmscan)
+        return None
+    return subprocess.run(["git", "-C", args.codetta_dir, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip() or "unknown"
+
+
+def _run_all(rows, args, res, deadline):
+    recs = []
+    if rows:
+        recs.append(screen_set(rows[0], args, res, deadline))  # alone first: builds Codetta's emission cache
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
+            recs.extend(ex.map(lambda r: screen_set(r, args, res, deadline), rows[1:]))
+    return recs
+
+
+def screen(args):
+    import run_pilot  # needs Codetta; only the Codetta modes import these
+    import run_screen
+    from eukcode import shards as shardmod
 
     run_pilot.LOG_PATH = LOG_PATH
     rows = shardmod.read_species(args.census)
@@ -229,95 +366,15 @@ def screen(args):
             log("shard index %d out of range (%d shards)" % (args.shard_index, len(plan)))
             return 2
         rows = plan[args.shard_index]
-    hmmscan = os.path.join(args.codetta_dir, "hmmer-3.3.2", "bin", "hmmscan")
-    if not os.path.exists(hmmscan):
-        log("ERROR: Codetta's HMMER build is missing at %s" % hmmscan)
+    commit = _codetta_ready(args)
+    if commit is None:
         return 2
-    commit = subprocess.run(["git", "-C", args.codetta_dir, "rev-parse", "HEAD"],
-                            capture_output=True, text=True).stdout.strip() or "unknown"
-    res = run_pilot.setup_resources(args.codetta_dir, args.data_dir)
+    res = ensure_resources(run_pilot, args.codetta_dir, args.data_dir)
     t_start = time.time()
     deadline = t_start + args.time_budget_min * 60
     os.makedirs(args.tmp_dir, exist_ok=True)
-
-    def one(row):
-        acc = row["accession"].strip()
-        label = run_screen.label_for(acc, args.seed, args.disjoint_from)
-        rec_path = os.path.join(args.out_dir, "species", label + ".json")
-        if os.path.exists(rec_path):
-            with open(rec_path, encoding="utf-8") as fh:
-                old = json.load(fh)
-            if "error" not in old:
-                return old
-        gencode = shardmod.gencode_of(row)
-        rec = {"accession": acc, "label": label, "organism": row.get("organism", ""), "group": row.get("group", ""),
-               "tax_id": row.get("tax_id", ""), "ncbi_gencode": gencode, "lineage": row.get("lineage", ""),
-               "tier": row.get("tier", ""), "data_type": "transcriptome", "seed": args.seed,
-               "disjoint_from": args.disjoint_from}
-        work = os.path.join(args.tmp_dir, label)
-        os.makedirs(work, exist_ok=True)
-        t0 = time.time()
-        try:
-            if deadline - time.time() < 600:
-                raise RuntimeError("time budget reached before download")
-            gz = os.path.join(work, "set.fsa_nt.gz")
-            last = None
-            for u in ([row["url"]] if row.get("url") else []) + tsa.fasta_urls(acc):
-                try:
-                    ncbi.http_download(u, gz, timeout=900)
-                    rec["source_url"] = u
-                    last = None
-                    break
-                except Exception as exc:
-                    last = exc
-            if last is not None:
-                raise RuntimeError("download failed: %s" % last)
-            sample, n_usable = tsa.sample_transcripts(gz, int(args.cap_mb * 1e6), seed=args.seed,
-                                                      disjoint_from=args.disjoint_from, min_len=args.min_len)
-            os.remove(gz)
-            if not sample:
-                raise RuntimeError("no usable transcripts")
-            inp = os.path.join(work, label + ".fna")
-            from eukcode import fasta
-            fasta.write_fasta(sample, inp)
-            rec.update({"cap_mb": args.cap_mb, "transcripts_usable": n_usable, "transcripts_used": len(sample),
-                        "sample_bp": sum(len(s) for _, s in sample), "sample_gc": round(fasta.gc_fraction(sample), 4),
-                        "prep_minutes": round((time.time() - t0) / 60, 2)})
-            del sample
-            remaining = deadline - time.time()
-            if remaining < 300:
-                raise RuntimeError("time budget reached before Codetta")
-            r = run_pilot.run_codetta({"label": label}, {"input_path": inp}, args.codetta_dir, res, args.out_dir,
-                                      work, args.threads, min(remaining, args.per_species_max_min * 60))
-            cands = known.candidates(r["inferred"], gencode, rec["lineage"], rec["organism"])
-            keep = set(c["codon"] for c in cands) | {"TAA", "TAG", "TGA"}
-            rec.update({"inferred": r["inferred"], "best_models": r["best_models"], "codetta_minutes": r["minutes"],
-                        "n_called": codes.called_count(r["inferred"]), "stop_calls": known.stop_calls(r["inferred"]),
-                        "candidates": cands, "top_class": known.most_interesting(cands),
-                        "codon_detail": {k: v for k, v in r["codon_table"].items() if k in keep}})
-            log("%s %s: %s cands=%s (%.1f min)" % (acc, rec["organism"], r["inferred"],
-                                                   ",".join("%s=%s/%s" % (c["codon"], c["called"], c["class"]) for c in cands) or "none",
-                                                   r["minutes"]))
-        except subprocess.TimeoutExpired:
-            rec["error"] = "codetta timeout"
-        except Exception as exc:
-            rec["error"] = str(exc)[:300]
-            log("%s: error %s" % (acc, rec["error"]))
-        finally:
-            shutil.rmtree(work, ignore_errors=True)
-        rec["wall_minutes"] = round((time.time() - t0) / 60, 2)
-        os.makedirs(os.path.dirname(rec_path), exist_ok=True)
-        with open(rec_path, "w", encoding="utf-8") as fh:
-            json.dump(rec, fh, indent=1)
-        return rec
-
     log("eukcode-scan %s TSA screen, Codetta %s, %d sets" % (__version__, commit, len(rows)))
-    recs = []
-    if rows:
-        recs.append(one(rows[0]))  # alone first: builds Codetta's emission cache if missing
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
-            recs.extend(ex.map(one, rows[1:]))
+    recs = _run_all(rows, args, res, deadline)
     run_screen.write_tables(args.out_dir, recs)
     classes = {}
     for r in recs:
@@ -337,8 +394,105 @@ def screen(args):
     return 0
 
 
-def main(argv=None):
-    global LOG_PATH
+def controls(args):
+    """The transcriptome control pilot: resolve, screen and grade P5/P6 (A2.5, A3)."""
+    import run_pilot
+    import run_screen
+    from eukcode import tsa_pilot
+
+    run_pilot.LOG_PATH = LOG_PATH
+    with open(args.controls, encoding="utf-8") as fh:
+        ctrls = tsa_pilot.control_list(json.load(fh))
+    if args.only:
+        keep = set(x.strip() for x in args.only.split(",") if x.strip())
+        ctrls = [c for c in ctrls if c["label"] in keep]
+    commit = _codetta_ready(args)
+    if commit is None:
+        return 2
+    t_start = time.time()
+    deadline = t_start + args.time_budget_min * 60
+
+    status, rows, ctrl_rows = [], [], []
+    for c in ctrls:
+        crow, srow = resolve_control(c, c["role"], args.min_bp)
+        ctrl_rows.append(crow)
+        st = {"label": c["label"], "role": c["role"], "table": c["table"], "resolved": srow is not None,
+              "accession": crow["accession"], "organism": crow["organism"], "ncbi_gencode": crow["ncbi_gencode"],
+              "tier": crow["tier"], "status": crow["status"], "verdict": None, "note": ""}
+        if srow is not None:
+            srow["group"] = c["role"]
+            srow["control_label"] = c["label"]
+            rows.append(srow)
+            if crow["ncbi_gencode"] and crow["ncbi_gencode"] != str(c["table"]):
+                st["note"] = "NCBI code %s differs from registered table %d" % (crow["ncbi_gencode"], c["table"])
+        status.append(st)
+        log("control %s: %s %s %s" % (c["label"], crow["status"], crow["accession"], crow["organism"]))
+    write_csv(os.path.join(args.out_dir, "tsa_controls_resolved.csv"), ctrl_rows, CONTROL_FIELDS)
+
+    res = ensure_resources(run_pilot, args.codetta_dir, args.data_dir)
+    os.makedirs(args.tmp_dir, exist_ok=True)
+    rows.sort(key=lambda r: tsa._int(r.get("length")))  # smallest first: it builds the emission cache
+    log("eukcode-scan %s TSA control pilot, Codetta %s, %d of %d controls resolved" % (
+        __version__, commit, len(rows), len(ctrls)))
+    recs = _run_all(rows, args, res, deadline)
+    by_acc = {r["accession"]: r for r in recs}
+    ctrl_by_label = {c["label"]: c for c in ctrls}
+    for st in status:
+        r = by_acc.get(st["accession"]) if st["resolved"] else None
+        if r is None:
+            continue
+        if "error" in r:
+            st["note"] = (st["note"] + "; " if st["note"] else "") + "error: " + r["error"]
+            continue
+        st["verdict"] = tsa_pilot.evaluate(ctrl_by_label[st["label"]], r["inferred"])
+        st["inferred"] = r["inferred"]
+        st["sample_bp"] = r.get("sample_bp")
+        st["codetta_minutes"] = r.get("codetta_minutes")
+    run_screen.write_tables(args.out_dir, recs)
+    p5, p6 = tsa_pilot.grade_p5(status), tsa_pilot.grade_p6(status)
+    g = tsa_pilot.gate(p5, p6, args.p1_holds, args.p2_holds)
+    rates = [s["codetta_minutes"] / (s["sample_bp"] / 1e6) for s in status
+             if s.get("codetta_minutes") is not None and s.get("sample_bp")]
+    meta = {"eukcode_version": __version__, "codetta_commit": commit, "cap_mb": args.cap_mb,
+            "seed": args.seed, "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "wall_minutes": round((time.time() - t_start) / 60, 1), "workers": args.workers,
+            "hmmer_threads": args.threads,
+            "median_codetta_min_per_mb": round(sorted(rates)[len(rates) // 2], 2) if rates else None}
+    with open(os.path.join(args.out_dir, "tsa_pilot.json"), "w", encoding="utf-8") as fh:
+        json.dump({"meta": meta, "P5": p5, "P6": p6, "gate": g, "controls": status}, fh, indent=1)
+    with open(os.path.join(args.out_dir, "TSA_PILOT.md"), "w", encoding="utf-8") as fh:
+        fh.write(tsa_pilot.report_md(status, p5, p6, g, meta))
+    log("TSA control pilot done: P5 holds=%s, P6 holds=%s, gate=%s" % (p5["holds"], p6["holds"], g))
+    shutil.rmtree(args.tmp_dir, ignore_errors=True)
+    return 0
+
+
+def _tristate(v):
+    v = (v or "").strip().lower()
+    if v in ("yes", "true", "1"):
+        return True
+    if v in ("no", "false", "0"):
+        return False
+    return None
+
+
+def _codetta_args(p, tmp):
+    p.add_argument("--data-dir", default="/data")
+    p.add_argument("--out-dir", default="/out")
+    p.add_argument("--codetta-dir", default=os.path.join(HERE, "codetta"))
+    p.add_argument("--tmp-dir", default=tmp)
+    p.add_argument("--cap-mb", type=float, default=2.0)
+    p.add_argument("--min-len", type=int, default=300)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--disjoint-from", type=int, default=None)
+    p.add_argument("--workers", type=int, default=2)
+    p.add_argument("--threads", type=int, default=2)
+    p.add_argument("--per-species-max-min", type=float, default=90)
+    p.add_argument("--time-budget-min", type=float, default=280)
+    p.add_argument("--only", default="")
+
+
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="mode", required=True)
     c = sub.add_parser("census")
@@ -348,27 +502,26 @@ def main(argv=None):
     c.add_argument("--min-bp", type=int, default=1_000_000)
     c.add_argument("--per-shard", type=int, default=12)
     c.add_argument("--no-url-check", action="store_true")
+    k = sub.add_parser("controls")
+    _codetta_args(k, "/tmp/eukcode-tsa-ctrl")
+    k.add_argument("--controls", default=os.path.join(HERE, "tsa_controls.json"))
+    k.add_argument("--min-bp", type=int, default=1_000_000)
+    k.add_argument("--p1-holds", type=_tristate, default=None, help="genome pilot P1: yes/no (default: not graded)")
+    k.add_argument("--p2-holds", type=_tristate, default=None, help="genome pilot P2: yes/no (default: not graded)")
     s = sub.add_parser("screen")
+    _codetta_args(s, "/tmp/eukcode-tsa")
     s.add_argument("--census", required=True)
     s.add_argument("--shard-index", type=int, default=0)
     s.add_argument("--per-shard", type=int, default=12)
-    s.add_argument("--only", default="")
-    s.add_argument("--data-dir", default="/data")
-    s.add_argument("--out-dir", default="/out")
-    s.add_argument("--codetta-dir", default=os.path.join(HERE, "codetta"))
-    s.add_argument("--tmp-dir", default="/tmp/eukcode-tsa")
-    s.add_argument("--cap-mb", type=float, default=2.0)
-    s.add_argument("--min-len", type=int, default=300)
-    s.add_argument("--seed", type=int, default=0)
-    s.add_argument("--disjoint-from", type=int, default=None)
-    s.add_argument("--workers", type=int, default=2)
-    s.add_argument("--threads", type=int, default=2)
-    s.add_argument("--per-species-max-min", type=float, default=90)
-    s.add_argument("--time-budget-min", type=float, default=280)
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None):
+    global LOG_PATH
+    args = build_parser().parse_args(argv)
     os.makedirs(args.out_dir, exist_ok=True)
     LOG_PATH = os.path.join(args.out_dir, "log.txt")
-    return census(args) if args.mode == "census" else screen(args)
+    return {"census": census, "controls": controls, "screen": screen}[args.mode](args)
 
 
 if __name__ == "__main__":

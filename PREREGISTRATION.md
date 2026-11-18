@@ -173,3 +173,156 @@ therefore also reports the share of the candidate codon's support coming from tr
 whose best hit is outside the species' major clade. Check 4 may use a genome assembly of the
 same species or genus from stage 2, or a second TSA set. Every set is reported whatever the
 outcome (`screen_rows.csv`, `candidates.csv`, one JSON record per set).
+
+## Addendum A3 (2026-11-17, v0.4.0): running and grading the transcriptome control pilot
+
+Registered before any genome or transcriptome output existed: neither the genome pilot nor
+the TSA census had run when this was written. Nothing above changes; A3 fixes details A2 left
+open.
+
+**A3.1 Order.** The transcriptome control pilot (`run_tsa.py controls`) resolves the controls
+itself and does not need the TSA census, so it may run before or alongside the genome pilot.
+The gate in A2.5 is unchanged: the TSA screen needs P1, P2, P5 and P6 to hold. The pilot
+reports the gate as closed while P1 and P2 are not yet graded.
+
+**A3.2 Counting rules** (`eukcode/tsa_pilot.py`):
+- A control *resolves* when an INSDC TSA set of at least 1 Mb, not environmental, is found for
+  its name. The largest such set is used. Unresolved controls are listed and not replaced.
+- **P5:** a resolved positive control that ends without a Codetta result (download error,
+  timeout, time budget) counts as a **failure**. P5 holds if at least 3 positive controls
+  resolve and the number that call every diagnostic codon is at least (resolved - 1).
+- **P6:** only standard controls that finish are counted, and at least 3 must finish (an
+  unfinished control has no calls, so it cannot pass or fail). P6 holds if the total number of
+  called codons that contradict table 1 across them is at most 1. A codon with no call ('?')
+  never counts as a contradiction.
+- Each control is judged against the table registered in `tsa_controls.json`. If NCBI Taxonomy
+  gives a different code for the resolved organism, that is reported in a note.
+- **P7:** a species is a ciliate if "Ciliophora" is a rank in its NCBI lineage. Only tier `new`
+  species that finish without error are counted.
+
+**A3.3 Cost, reported but not predicted.** The pilot reports the median Codetta minutes per Mb
+for transcriptome samples, to size the screen shards. There is no pass mark.
+
+**A3.4 Prior art added.** Chen et al. 2023 (*Stop or not: genome-wide profiling of reassigned
+stop codons in ciliates*, Mol Biol Evol 40:msad064) profiled stop-codon reassignments across
+published ciliate genomes and transcriptomes. It covers ciliates only, so the eukaryote-wide
+question stands. Any ciliate candidate is compared with that paper, as well as with Swart et
+al. 2016 and McGowan et al. 2024, before anything is said.
+
+## Addendum A4 (2026-11-17, v0.5.0): how check 2 is measured and graded
+
+Registered before any check 2 output, any screen output and any pilot output existed. Nothing
+above changes; A4 makes check 2 (and A2.7) exact.
+
+**A4.1 Tracing the evidence.** For one candidate, the species' sample is drawn again with the
+same seed and cap (so it is the same sample) and Codetta is rerun with its alignment output
+kept. Every line of that output (one aligned codon: piece, frame, protein position, Pfam
+profile) is mapped back to an input sequence and position by rebuilding Codetta 2.0's own
+piece splitting (records over 100,000 nt are halved until no piece is longer) and its six
+frames. As a self-check, the codon at the mapped position is recomputed and must equal the
+codon Codetta wrote; any mismatch is reported. The candidate codon's observations are counted
+per input sequence (transcript or genome chunk).
+
+**A4.2 Homology search.** The 20 input sequences with the most observations of the candidate
+codon (ties: earlier in the sample) are searched with blastx (standard code) at EMBL-EBI
+against UniProtKB, E-value at most 1e-5, with the species' own NCBI taxid excluded so that a
+contaminated assembly cannot vouch for itself. The query is the stretch covering that
+sequence's aligned candidate codons plus 300 nt each side, at most 3,000 nt. The best hit
+(first in EBI's order) gives a taxid, and NCBI Taxonomy gives its lineage.
+
+**A4.3 Classes.** A best hit is `same_clade` if it is eukaryotic and its first two lineage
+names below Eukaryota (for example Sar / Alveolata, Discoba / Euglenozoa) match the species'
+(when the species has only one, that one must match); `other_eukaryote` if eukaryotic
+otherwise; `bacteria`, `archaea` or `virus` by its top lineage name; `no_hit` if blastx finds
+nothing; `unknown` if the hit has no usable lineage; `error` if the search failed. Only the
+first five classes count as *classified*.
+
+**A4.4 Grading** (`eukcode/support.py`, `grade_check2`), with shares weighted by the number of
+observations of the candidate codon:
+- **inconclusive** if fewer than 3 sequences are classified, or the classified sequences carry
+  less than 20% of all observations of the codon;
+- otherwise **fail** if the eukaryotic share is 0.5 or less;
+- otherwise **pass** if the same-clade share is above 0.5;
+- otherwise **fail** if a single other eukaryotic clade carries more than 0.5 (a prey or
+  symbiont signal);
+- otherwise **pass_unplaced**: eukaryotic, but the hits do not confirm the species' clade, as
+  expected for orphan lineages with no close relatives in UniProtKB. This is reported as such
+  and is weaker evidence than a pass.
+Each result also reports whether one sequence carries more than half of all observations
+(`concentrated`), the outside-clade share A2.7 asks for, and the prokaryote or virus share.
+
+**A4.5 Validation, before check 2 is used on any candidate** (`run_check2.py demo`,
+`check2_demo.json`). Each input is resolved by name, in the listed order, to its largest usable
+INSDC TSA set; the first name that resolves is used and reported.
+- `euplotes_uga`: a 2 Mb sample of a *Euplotes* transcriptome (UGA = Cys); codon TGA.
+- `mix_uar`: 1 Mb of a UAR = Gln ciliate (*Tetrahymena thermophila* first) plus 1 Mb of a
+  standard-code alga or protist (*Phaeodactylum tricornutum* first), one Codetta run on the
+  mixed sample; codon TAA. This is a constructed contamination case where the truth is known.
+
+Predictions:
+- **P8 (mapping):** in every case that finishes, every alignment line maps back to the codon
+  Codetta reported (0 mismatches, more than 0 lines).
+- **P9 (attribution):** in `mix_uar`, at least 90% of the TAA observations come from ciliate
+  transcripts, and check 2 on TAA (species = the ciliate) passes.
+- **P10 (a real reassignment passes):** check 2 on the *Euplotes* TGA signal passes.
+
+If P8 fails, check 2 is not used until the mapping is fixed. If P9 or P10 fails, the failure is
+diagnosed and reported, and the rules in A4.2-A4.4 are revised in a new addendum before check
+2 is applied to any candidate.
+
+## Addendum A5 (2026-11-18, v0.5.0): P10K prior art, one correction, and prediction P11
+
+Registered before any pilot, census, screen or check 2 output existed (every eukcode job was
+still queued). The rules above are unchanged. A5.1 narrows the novelty claim made in "The
+question", and A5.2 corrects one date there.
+
+**A5.1 Prior art: the P10K database.** Gao et al. 2024 (*The P10K database: a data portal for
+the protist 10 000 genomes project*, Nucleic Acids Res 52:D747, doi:10.1093/nar/gkad992) ran
+Codetta and FACIL inside the gene-annotation pipeline of the Protist 10,000 Genomes Project. The
+paper says the pipeline was used on the project's 1,101 newly sequenced datasets (mostly
+ciliates) and on 659 re-annotated MMETSP transcriptomes. It reports codon tables **for ciliates
+only**: tables 1, 4, 6, 10, 12, 27 and 30, no new code type, and disagreements with NCBI
+Taxonomy for 31 ciliate species, mostly Heterotrichea. Per-dataset codes appear only on the
+portal's gene pages. There is no bulk table and no results for non-ciliates. So eukcode-scan is
+not the first project to run Codetta on many protist datasets. The claim is narrowed to this:
+it is the first screen to **report** per-assembly code calls across all eukaryotic lineages in
+the INSDC archives, with every candidate traced for contamination (check 2). Before anything is
+said about them, ciliate candidates are compared with P10K's genus-level codes (its Figure 3) as
+well as with the papers in A3.4. Candidates from MMETSP-derived data are compared with the code
+P10K gives that dataset.
+
+**A5.2 Correction.** "The question" calls the pond ciliate with UAA = Lys and UAG = Glu a 2026
+report. The paper is McGowan et al. 2023 (PLoS Genet 19:e1010913), already in the A1
+catalogue. The 2026 items were press coverage of it.
+
+**A5.3 The P10K CUG question (prediction P11).** P10K assigns NCBI table 12 to some Spirotrichea.
+Table 12 is the alternative yeast code: CUG = Ser, with UAA, UAG and UGA as stops. Every ciliate
+reassignment reported so far is at a stop codon, and no nuclear CUG change is known outside the
+budding yeasts. A table 12 call in a ciliate therefore means one of two things:
+- **an artefact.** One likely source is RNA or DNA from a CUG-Ser yeast (Serinales) in the
+  culture. Spirotrich genomes are AT-rich and use CUG rarely, so even a small contaminant could
+  supply most of the CUG evidence. Another is a pipeline that maps the inferred code to the
+  nearest NCBI table.
+- **a real CUG reassignment.** That would be the first sense-codon change in any ciliate and
+  the first nuclear CUG change outside the yeasts.
+
+**P11:** no ciliate in the eukcode screen (genomes and transcriptomes) has a Codetta CTG = S
+call that survives check 2 (outcome pass or pass_unplaced). A CTG = S call whose check 2 is
+fail or inconclusive counts as explained or unresolved, not as a reassignment. P11 is graded
+only after every CTG = S ciliate has a check 2 result for CTG (`eukcode/cug.py`, `grade_p11`).
+Our prior expectation is that P11 holds. If it does not, the surviving call goes through
+checks 1, 3 and 4 like any candidate. It is reported as a candidate, never as a discovery,
+until a person has checked it.
+
+**A5.4 P10K's own targets.** The genera that P10K's Figure 3 labels with table 12 are recorded
+in `p10k_table12.json`, together with the date and how they were read. This is done before any
+eukcode output for those genera is seen, and the list is not edited afterwards. Every dataset
+the screen has for them is reported with its CTG call (`cug.p10k_targets`):
+- `agrees_with_p10k` (S), which goes to check 2;
+- `contradicts_p10k` (L);
+- `no_call` ('?': too few CUG observations to call);
+- `mixed`;
+- `not_screened`.
+
+A dataset that contradicts P10K is reported as a disagreement with P10K and not as an error by
+either side. Codetta at a 2 Mb cap may simply have less evidence than a whole-genome run.

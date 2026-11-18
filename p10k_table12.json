@@ -1,0 +1,8 @@
+{
+ "about": "Genera that the P10K database paper (Gao et al., Nucleic Acids Res 52:D747, 2024, doi:10.1093/nar/gkad992, Figure 3) labels with NCBI codon table 12 (CUG = Ser). PREREGISTRATION.md addendum A5.4: recorded before any eukcode output for these genera is seen, and not edited afterwards.",
+ "recorded_utc": null,
+ "how_read": null,
+ "table12_genera": [],
+ "table4_genera": [],
+ "status": "not yet recorded: the paper text names only the class (Spirotrichea); the genus labels are in the Figure 3 image, to be read and recorded in a later release"
+}

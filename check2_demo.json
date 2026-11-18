@@ -1,0 +1,25 @@
+{
+  "note": "Check 2 validation cases (PREREGISTRATION.md addendum A4.5, registered 2026-11-17 before any check 2 output existed). Each input is resolved by name, in order, to its largest non-environmental INSDC TSA set of at least 1 Mb; the first name that resolves is used and reported.",
+  "cases": [
+    {
+      "label": "euplotes_uga",
+      "kind": "demo",
+      "codons": ["TGA"],
+      "inputs": [
+        {"kind": "tsa", "taxa": ["Euplotes focardii", "Euplotes raikovi", "Euplotes crassus", "Euplotes octocarinatus"],
+         "cap_mb": 2.0, "seed": 0, "prefix": "EUP"}
+      ]
+    },
+    {
+      "label": "mix_uar",
+      "kind": "demo",
+      "codons": ["TAA"],
+      "inputs": [
+        {"kind": "tsa", "taxa": ["Tetrahymena thermophila", "Paramecium tetraurelia", "Paramecium caudatum", "Oxytricha trifallax", "Stylonychia lemnae"],
+         "cap_mb": 1.0, "seed": 0, "prefix": "CIL"},
+        {"kind": "tsa", "taxa": ["Phaeodactylum tricornutum", "Thalassiosira pseudonana", "Chlamydomonas reinhardtii", "Bigelowiella natans", "Gephyrocapsa huxleyi", "Emiliania huxleyi"],
+         "cap_mb": 1.0, "seed": 0, "prefix": "ALG"}
+      ]
+    }
+  ]
+}
