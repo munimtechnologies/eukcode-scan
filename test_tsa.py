@@ -8,10 +8,11 @@ import unittest
 from eukcode import tsa
 
 
-def ena(acc, tax, bp, date, desc="", env="false", dataclass="TSA", keywords="TSA, Transcriptome Shotgun Assembly"):
+def ena(acc, tax, bp, date, desc="", env="false", dataclass="TSA", keywords="TSA, Transcriptome Shotgun Assembly",
+        study=None):
     return {"accession": acc, "scientific_name": "Sp %s" % tax, "tax_id": str(tax), "base_count": str(bp),
             "first_public": date, "environmental_sample": env, "dataclass": dataclass, "keywords": keywords,
-            "description": desc, "study_accession": "PRJ%s" % tax}
+            "description": desc, "study_accession": study if study is not None else "PRJ%s" % tax}
 
 
 class TestAccessions(unittest.TestCase):
@@ -50,6 +51,44 @@ class TestTiers(unittest.TestCase):
         self.assertEqual(tsa.set_tier(ena("GKLJ01000000", 1, 5_000_000, "2024-06-01")), "new")
         self.assertEqual(tsa.set_tier(ena("GKLJ01000000", 1, 5_000_000, "2016-09-01")), "new")
         self.assertTrue(tsa.flags(ena("GAAA01000000", 1, 1, "2020-01-01", env="true"))["environmental"])
+
+    def test_mmetsp_reassembly_projects(self):
+        # A6: the real ENA rows of the EBI/ELIXIR MMETSP re-assemblies never say MMETSP.
+        hbjk = ena("HBJK01000000", 36767, 30_139_777, "2021-02-01", desc="TSA: Euplotes focardii", keywords="",
+                   study="PRJEB37159")
+        hbii = ena("HBII01000000", 151035, 23_438_257, "2021-01-25", desc="TPA: Euplotes harpa",
+                   keywords="Third Party Data, TPA, TPA:assembly", study="PRJEB37117")
+        gklj = ena("GKLJ01000000", 36767, 21_328_652, "2024-06-21",
+                   desc="TSA: Euplotes focardii strain TN1, transcriptome shotgun assembly.", study="PRJNA896607")
+        self.assertTrue(tsa.is_mmetsp(hbjk))
+        self.assertTrue(tsa.is_mmetsp(hbii))
+        self.assertTrue(tsa.is_mmetsp({"study_accession": " prjeb37159 "}))
+        self.assertFalse(tsa.is_mmetsp(gklj))
+        self.assertFalse(tsa.is_mmetsp({}))
+        self.assertEqual(tsa.set_tier(hbjk), "mmetsp")
+        self.assertEqual(tsa.set_tier(gklj), "new")
+        chosen, skipped = tsa.choose_sets([hbjk, gklj])
+        self.assertEqual(skipped, [])
+        self.assertEqual(len(chosen), 1)
+        self.assertEqual(chosen[0]["accession"], "GKLJ01000000")  # non-MMETSP preferred
+        self.assertEqual(chosen[0]["tier"], "mmetsp")              # but the species was screened before
+
+    def test_retier_species(self):
+        species = [{"tax_id": "36767", "tier": "new", "accession": "HBJK01000000"},
+                   {"tax_id": "5938", "tier": "new", "accession": "GKLH01000000"},
+                   {"tax_id": "99", "tier": "pre2016", "accession": "GZZZ01000000"}]
+        sets = [{"tax_id": "36767", "description": "TSA: Euplotes focardii", "keywords": "",
+                 "study_accession": "PRJEB37159", "first_public": "2021-02-01"},
+                {"tax_id": "36767", "description": "TSA: Euplotes focardii strain TN1", "keywords": "",
+                 "study_accession": "PRJNA896607", "first_public": "2024-06-21"},
+                {"tax_id": "5938", "description": "TSA: Euplotes raikovi", "keywords": "",
+                 "study_accession": "PRJNA896607", "first_public": "2023-03-26"},
+                {"tax_id": "5938", "description": "TSA: Euplotes raikovi", "keywords": "",
+                 "study_accession": "PRJEB37159", "first_public": "2021-01-01", "skip_reason": "under 1000000 bp"}]
+        out = tsa.retier_species(species, sets)
+        self.assertEqual([r["tier"] for r in out], ["mmetsp", "new", "pre2016"])
+        self.assertEqual([r["tier_before_a6"] for r in out], ["new", "new", "pre2016"])
+        self.assertEqual(species[0]["tier"], "new")  # input not modified
 
     def test_choose_sets(self):
         rows = [

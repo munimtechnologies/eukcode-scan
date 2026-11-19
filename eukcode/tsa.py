@@ -15,6 +15,10 @@ far more aligned codons per megabase than a genome does.
   transcriptome for stop-codon reassignments, so sets derived from MMETSP are tier
   `mmetsp`. Sets first public before 2016-09-01 are tier `pre2016`. Everything newer is
   tier `new`.
+- MMETSP-derived sets are recognised by the word MMETSP in their description or keywords,
+  or (addendum A6) by belonging to one of the two INSDC projects that hold the 2021 EBI/ELIXIR
+  re-assemblies of MMETSP. Those 406 sets (prefix HB) say only "TSA: <species>" or
+  "TPA: <species>", so the word test alone never caught them.
 - Trinity-style assemblies hold many isoforms of one gene. Sampling keeps only the longest
   isoform per gene, so no gene is counted twice, and a disjoint resample (check 1) shares no
   gene with the first sample.
@@ -35,6 +39,9 @@ ENA_FIELDS = ["accession", "scientific_name", "tax_id", "base_count", "first_pub
               "environmental_sample", "dataclass", "keywords", "description", "study_accession"]
 SWART_CUTOFF = "2016-09-01"
 TIER_ORDER = ["new", "pre2016", "mmetsp"]
+# INSDC projects titled "Assembly and functional analysis of the Marine Microbial Eukaryotic
+# Transcriptome Project data set" (ENA study search, 2026-11-19): 406 TSA sets between them.
+MMETSP_STUDIES = frozenset({"PRJEB37117", "PRJEB37159"})
 
 _SET_RE = re.compile(r"^([A-Z]{4,6})(\d{2})\d+(?:\.\d+)?$")
 _GENE_RES = [
@@ -84,14 +91,20 @@ def _int(x):
         return 0
 
 
+def is_mmetsp(row):
+    """True if an ENA tsa_set row is derived from MMETSP (word test or re-assembly project)."""
+    text = " ".join([row.get("description") or "", row.get("keywords") or ""]).upper()
+    study = (row.get("study_accession") or "").strip().upper()
+    return "MMETSP" in text or study in MMETSP_STUDIES
+
+
 def flags(row):
     """Return {'environmental', 'tpa', 'mmetsp'} booleans for one ENA tsa_set row."""
-    text = " ".join([row.get("description", ""), row.get("keywords", "")]).upper()
     kw = [k.strip().upper() for k in (row.get("keywords") or "").replace(";", ",").split(",")]
     return {
         "environmental": (row.get("environmental_sample") or "").strip().lower() == "true",
         "tpa": (row.get("dataclass") or "").strip().upper() == "TPA" or "TPA" in kw,
-        "mmetsp": "MMETSP" in text,
+        "mmetsp": is_mmetsp(row),
     }
 
 
@@ -102,6 +115,30 @@ def set_tier(row):
     if (row.get("first_public") or "9999") < SWART_CUTOFF:
         return "pre2016"
     return "new"
+
+
+def retier_species(species, sets):
+    """Recompute species tiers from a census' per-set rows with the current rule (A6.2).
+
+    species: rows with 'tax_id' (and 'tier'); sets: per-set rows with 'tax_id',
+    'description', 'keywords', 'study_accession', 'first_public' and an optional
+    'skip_reason'. Only usable sets (no skip_reason) count, as in choose_sets. Returns new
+    species dicts with 'tier' replaced and the old value kept as 'tier_before_a6'.
+    """
+    by = {}
+    for s in sets:
+        if s.get("skip_reason"):
+            continue
+        by.setdefault(_int(s.get("tax_id")), []).append(set_tier(s))
+    out = []
+    for sp in species:
+        tiers = by.get(_int(sp.get("tax_id")))
+        row = dict(sp)
+        row["tier_before_a6"] = sp.get("tier", "")
+        if tiers:
+            row["tier"] = max(tiers, key=TIER_ORDER.index)
+        out.append(row)
+    return out
 
 
 def choose_sets(rows, min_bp=1_000_000):

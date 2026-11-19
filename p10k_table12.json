@@ -1,8 +1,24 @@
 {
  "about": "Genera that the P10K database paper (Gao et al., Nucleic Acids Res 52:D747, 2024, doi:10.1093/nar/gkad992, Figure 3) labels with NCBI codon table 12 (CUG = Ser). PREREGISTRATION.md addendum A5.4: recorded before any eukcode output for these genera is seen, and not edited afterwards.",
- "recorded_utc": null,
- "how_read": null,
- "table12_genera": [],
- "table4_genera": [],
- "status": "not yet recorded: the paper text names only the class (Spirotrichea); the genus labels are in the Figure 3 image, to be read and recorded in a later release"
+ "recorded_utc": "2026-11-19T04:20:00Z",
+ "how_read": "Figure 3 ('Genetic codes of ciliates', open access) was saved at full size (2787 x 1335 px) by a read-only browser session on 2026-11-18 and read label by label on 2026-11-19. At that time no eukcode job had produced any output (no pilot, census, screen or check 2 result existed). The P10K portal has no codon-table column; its gene pages were checked for two Euplotes datasets on 2026-11-18.",
+ "table12_genera": ["Euplotes"],
+ "table4_genera": ["Condylostoma", "Blepharisma"],
+ "figure3_labels": {
+  "Euplotes": "10,12 with red arrow and '(10)' (P10K disagrees with NCBI)",
+  "Condylostoma": "1,4 with red arrow and '(28,10)'",
+  "Blepharisma": "4 (no arrow)"
+ },
+ "p10k_gene_pages": [
+  {"species": "Euplotes focardii", "p10k_sample": "P10K-NCBI-002372", "assembly": "CAM_ASM_000278",
+   "source": "MMETSP0205 (gene IDs contain 'MMETSP0205')", "genetic_code_shown": 12},
+  {"species": "Euplotes octocarinatus", "p10k_sample": "P10K-MW-002960", "assembly": "GWHFDRO00000000.1",
+   "source": "P10K genome", "genetic_code_shown": 10}
+ ],
+ "insdc_sets_for_the_table12_dataset": {
+  "note": "INSDC transcriptome sets of the same organism and strain found via the ENA portal on 2026-11-19 (tax_tree(5935), genus Euplotes).",
+  "HBJK01000000": "Euplotes focardii strain TN1, 2021 EBI/ELIXIR re-assembly of the MMETSP reads (project PRJEB37159; runs SRR1296783, SRR1296928; BioSample SAMN02740072), 30.1 Mb. Probably the same MMETSP sample as P10K's table-12 dataset (MMETSP0205), in a different assembly; the run-to-MMETSP-ID link was not checked.",
+  "GKLJ01000000": "Euplotes focardii strain TN1, independent 2023 sequencing (project PRJNA896607), 21.3 Mb."
+ },
+ "status": "recorded"
 }

@@ -11,6 +11,10 @@
 3. Grades the pre-registered predictions P1-P4.
 4. In parallel, lists every current NCBI assembly in the protist groups that the full
    screen will cover, with each species' NCBI-assigned nuclear genetic code.
+
+v0.6.0: genomes are sampled with fasta.sample_file (two streaming passes, the same sample as
+the in-memory path, A1.2), and genome zips go to --tmp-dir and are deleted after extraction,
+so the job fits in about 1.5 GB and caches nothing but the Pfam database.
 """
 
 import argparse
@@ -87,9 +91,23 @@ def setup_resources(codetta_dir, data_dir):
     return res
 
 
+def ensure_resources_locked(codetta_dir, data_dir):
+    """setup_resources under the file lock the other eukcode jobs use on the shared volume."""
+    try:
+        import fcntl  # Linux only; the job runs in a Linux container
+    except ImportError:
+        return setup_resources(codetta_dir, data_dir)
+    os.makedirs(data_dir, exist_ok=True)
+    with open(os.path.join(data_dir, ".eukcode-pfam.lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            return setup_resources(codetta_dir, data_dir)
+        finally:
+            fcntl.flock(lk, fcntl.LOCK_UN)
+
+
 def prepare_input(ctrl, data_dir, tmp_dir):
     """Resolve, download, sample. Returns a dict describing the input or raises."""
-    genomes = os.path.join(data_dir, "genomes")
     summary = None
     if ctrl.get("accession"):
         try:
@@ -104,18 +122,19 @@ def prepare_input(ctrl, data_dir, tmp_dir):
     if summary is None:
         raise RuntimeError("no NCBI assembly found for %s" % ctrl["taxa"])
     acc = summary["accession"]
-    zp = ncbi.download_genome_zip(acc, genomes)
+    gdir = os.path.join(tmp_dir, "genomes", ctrl["label"])
+    zp = ncbi.download_genome_zip(acc, gdir)
     raw = os.path.join(tmp_dir, "%s.raw.fna" % ctrl["label"])
     ncbi.extract_fasta(zp, raw)
-    ch = fasta.chunks(fasta.read_fasta(raw))
+    shutil.rmtree(gdir, ignore_errors=True)
+    sample, n_chunks = fasta.sample_file(raw, int(ctrl["cap_mb"] * 1_000_000), seed=0)
     os.remove(raw)
-    sample = fasta.sample_chunks(ch, int(ctrl["cap_mb"] * 1_000_000), seed=0)
     path = os.path.join(tmp_dir, "%s.fna" % ctrl["label"])
     fasta.write_fasta(sample, path)
     bp = sum(len(s) for _, s in sample)
     info = {
         "assembly": summary,
-        "chunks_total": len(ch),
+        "chunks_total": n_chunks,
         "chunks_used": len(sample),
         "sample_bp": bp,
         "sample_gc": round(fasta.gc_fraction(sample), 4),
@@ -308,7 +327,7 @@ def main(argv=None):
         census_thread = threading.Thread(target=_census, daemon=True)
         census_thread.start()
 
-    res = setup_resources(args.codetta_dir, args.data_dir)
+    res = ensure_resources_locked(args.codetta_dir, args.data_dir)
 
     results = {}
     for c in controls:

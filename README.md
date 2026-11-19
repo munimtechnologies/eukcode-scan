@@ -28,51 +28,42 @@ and transcriptome in the public archives.
 
 ## Status
 
+No eukcode job has produced output yet; every result below is still pending.
+
 - **Stage 1 (pilot, registered 2026-11-17):** Codetta is run on nine genomes with documented
   codes, and an NCBI census lists the target assemblies. The predictions are in
-  [PREREGISTRATION.md](PREREGISTRATION.md). The pilot job is queued; no results yet.
+  [PREREGISTRATION.md](PREREGISTRATION.md). The pilot job is queued.
 - **v0.2.0 (2026-11-17):** the stage 2 runner (`make_shards.py`, `run_screen.py`), low-memory
   genome sampling, and `eukcode/known.py`, a catalogue of documented eukaryotic nuclear
   reassignments that sorts every candidate into a class fixed before any data were seen
-  (PREREGISTRATION.md, addendum A1).
+  (addendum A1).
 - **v0.3.0 (2026-11-17): the transcriptome tranche** (`run_tsa.py`, `eukcode/tsa.py`,
-  addendum A2). Many protist lineages, including uncultured single cells, have a transcriptome
-  but no genome. The tranche:
-  - lists every INSDC TSA set under the target groups through the ENA portal API, keeps one per
-    species and fetches it from NCBI GenBank;
-  - samples whole transcripts, keeping only the longest isoform of each gene;
-  - sorts species into novelty tiers set by prior art. `mmetsp`: Swart et al. 2016 already
-    screened all MMETSP transcriptomes for stop-codon changes. `pre2016`: first public before
-    that screen. `new`: sets no systematic screen has seen.
-
-  It adds a transcriptome control pilot (P5, P6) and a pre-registered biological prediction
-  (P7) before any transcriptome is read. The census of TSA sets is queued.
-- **v0.5.0 (2026-11-18)** includes the transcriptome control pilot that was planned as v0.4.0
-  and was never released on its own. It adds:
-  - **The transcriptome control pilot** (`run_tsa.py controls`, `eukcode/tsa_pilot.py`,
-    addendum A3). It resolves 16 controls (8 known alternative codes, 8 standard-code species)
-    to their TSA sets and runs Codetta on a 2 Mb sample of each. P5 and P6 are graded with
-    counting rules fixed in A3 before any output existed. The job is queued.
-  - **Check 2, where a candidate's evidence comes from** (`run_check2.py`, `eukcode/support.py`,
-    `eukcode/ebi_blast.py`, addendum A4). A new code called from a contaminated sample would be
-    a false discovery: prey inside a predator's cells, or bacteria or yeasts in a culture, can
-    lend the sample their codon usage. Check 2:
-    - reruns Codetta on the same sample with its alignment output kept;
-    - maps every aligned codon back to its transcript or genome chunk, recomputing each codon
-      to verify the mapping;
-    - sends the 20 sequences carrying most of the candidate codon's evidence to blastx at
-      EMBL-EBI (UniProtKB, the species' own taxid excluded);
-    - grades the signal as pass, pass_unplaced, fail or inconclusive, with rules fixed in A4.
-
-    Before check 2 is used, it is validated on a known code (*Euplotes*, UGA = Cys) and on a
-    constructed 50/50 ciliate + alga mix where the truth is known (P8-P10). The validation job
-    is queued.
-  - **The P10K CUG question** (`eukcode/cug.py`, addendum A5). The P10K paper assigns NCBI table
-    12 (CUG = Ser, the code of the CUG yeasts) to some spirotrich ciliates, without discussion.
-    No ciliate has ever been shown to change a sense codon. If the call is real, it would be the
-    first nuclear CUG change outside the yeasts. If not, the likely cause is yeast RNA in the
-    cultures. Prediction P11 (no ciliate CTG = Ser call survives check 2) was registered before
-    any data were seen. A5 also adds P10K to the prior art and narrows the novelty claim.
+  addendum A2). It lists every INSDC TSA set under the target groups, keeps one per species,
+  samples whole transcripts (longest isoform per gene) and sorts species into novelty tiers set
+  by prior art (`mmetsp`, `pre2016`, `new`). It adds a transcriptome control pilot (P5, P6) and
+  a biological prediction (P7).
+- **v0.5.0 (2026-11-18):** the transcriptome control pilot (addendum A3); **check 2**, which
+  traces where a candidate codon's evidence comes from and sends the top 20 sequences to blastx
+  at EMBL-EBI (`run_check2.py`, addendum A4, validated by P8-P10); and **the P10K CUG
+  question** (`eukcode/cug.py`, addendum A5, prediction P11).
+- **v0.6.0 (2026-11-19), addendum [A6](PREREGISTRATION_A6.md):**
+  - **A fix to the novelty tiers.** The 406 EBI/ELIXIR re-assemblies of MMETSP (INSDC projects
+    PRJEB37117 and PRJEB37159) never mention MMETSP in their ENA description or keywords. The
+    old rule would have tiered every one of them `new` ("unscreened"). Sets are now recognised
+    by project as well (`tsa.is_mmetsp`), and tiers from the queued census are recomputed with
+    `tsa.retier_species` before use.
+  - **P10K's targets recorded** (`p10k_table12.json`) before any output: the only genus with
+    table 12 in P10K's Figure 3 is ***Euplotes***. The P10K dataset labelled "Genetic Code: 12"
+    is *Euplotes focardii* from MMETSP0205. Two INSDC transcriptomes exist for the same strain
+    (TN1): the MMETSP re-assembly HBJK01 and an independent 2023 sequencing, GKLJ01.
+  - **A direct test** (`check2_cug.json`, `check2_a6.json`): Codetta and check 2 for CTG on
+    both TN1 sets (two disjoint samples of HBJK01) and on *E. octocarinatus*. TGA = Cys is the
+    built-in positive control. The reading rules are fixed in A6.4. If the CUG = Ser signal is
+    present only in the MMETSP culture and traces to fungi, it is a contaminant. If it passes
+    check 2 in both independent sets, it is a candidate for the first sense-codon change known
+    in a ciliate.
+  - **Lower memory, same results** (A6.5): the genome pilot now samples genomes in two
+    streaming passes (the same sample, as A1.2 states), so every queued job fits in 1.5 GB.
 - **Stage 2:** the screen itself, with every candidate checked against a second sample,
   contamination, the literature and a second assembly. It starts only if the pilot's P1 and P2
   hold (and, for transcriptomes, P5 and P6).
@@ -89,7 +80,8 @@ python run_screen.py --shard shards/shard_00.csv --data-dir data --out-dir out-s
 python run_tsa.py census --out-dir out-tsa                   # transcriptome census (metadata only)
 python run_tsa.py controls --data-dir data --out-dir out-tctl --cap-mb 2   # transcriptome control pilot
 python run_tsa.py screen --census out-tsa/tsa_species.csv --shard-index 0 --data-dir data --out-dir out-t00
-python run_check2.py demo --data-dir data --out-dir out-c2demo             # check 2 validation (P8-P10)
+python run_check2.py demo --cases check2_a6.json --data-dir data --out-dir out-c2demo   # check 2 validation (P8-P10)
+python run_check2.py demo --cases check2_cug.json --data-dir data --out-dir out-cug     # Euplotes CUG test (A6.4)
 python run_check2.py records --records-dir out-t00/species --data-dir data --out-dir out-c2
 ```
 
@@ -134,5 +126,7 @@ standard genetic code*, Current Biology 35:R1104).
   S. M. Heaphy et al., Mol Biol Evol 2016; W. Chen et al., *Stop or not: genome-wide profiling
   of reassigned stop codons in ciliates*, Mol Biol Evol 2023; B. McGowan et al., PLoS Genet
   2024; X. Gao et al., *The P10K database*, Nucleic Acids Res 2024.
+- MMETSP re-assemblies: EBI/ELIXIR and Roscoff Biological Station, INSDC projects PRJEB37117 and
+  PRJEB37159.
 - HMMER (BSD-3-Clause), Pfam (CC0), NCBI Datasets and E-utilities, ENA portal API, INSDC TSA
   (public data), EMBL-EBI Job Dispatcher NCBI BLAST+ service and UniProtKB (CC BY 4.0).

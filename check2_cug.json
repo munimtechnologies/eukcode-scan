@@ -1,0 +1,32 @@
+{
+  "note": "Targeted test of P10K's table-12 call for Euplotes (addendum A6.4, registered 2026-11-19 before any eukcode output existed). Exploratory: it runs before the genome pilot (P1, P2) and the check 2 validation (P8-P10) are graded, and is reported as such. Each case: Codetta 2.0 on a 2 Mb transcript sample with alignments kept; the CTG evidence is traced and graded by check 2 (A4). The TGA call in each inferred code is the built-in positive control (Euplotes UGA = Cys).",
+  "cases": [
+    {
+      "label": "cug_focardii_tn1_2023",
+      "kind": "p11",
+      "codons": ["CTG"],
+      "inputs": [
+        {"kind": "tsa", "accession": "GKLJ01000000", "organism": "Euplotes focardii", "tax_id": "36767",
+         "cap_mb": 2.0, "seed": 0, "prefix": "TN1"}
+      ]
+    },
+    {
+      "label": "cug_focardii_mmetsp_s1",
+      "kind": "p11",
+      "codons": ["CTG"],
+      "inputs": [
+        {"kind": "tsa", "accession": "HBJK01000000", "organism": "Euplotes focardii", "tax_id": "36767",
+         "cap_mb": 2.0, "seed": 1, "disjoint_from": 0, "prefix": "MMS"}
+      ]
+    },
+    {
+      "label": "cug_octocarinatus",
+      "kind": "p11",
+      "codons": ["CTG"],
+      "inputs": [
+        {"kind": "tsa", "accession": "GKLI01000000", "organism": "Euplotes octocarinatus", "tax_id": "2716877",
+         "cap_mb": 2.0, "seed": 0, "prefix": "OCT"}
+      ]
+    }
+  ]
+}
