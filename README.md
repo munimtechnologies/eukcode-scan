@@ -64,6 +64,16 @@ No eukcode job has produced output yet; every result below is still pending.
     in a ciliate.
   - **Lower memory, same results** (A6.5): the genome pilot now samples genomes in two
     streaming passes (the same sample, as A1.2 states), so every queued job fits in 1.5 GB.
+- **v0.7.0 (2026-11-20), addendum [A7](PREREGISTRATION_A7.md): a tRNA test of the Euplotes
+  CUG label.** Every known nuclear CUG -> Ser change is carried by a tRNA that reads CUG but has
+  a serine-type body. `run_trna.py` runs tRNAscan-SE 2.0 with its isotype-specific models
+  (`--detail`) on the *E. focardii* TN1 macronuclear genome (GCA_001880345.2), two more
+  *Euplotes* genomes and both TN1 transcriptomes, with two CUG-Ser yeasts (*Candida albicans*,
+  *Debaryomyces hansenii*) as positive controls (P12) and *Tetrahymena* as a ciliate negative
+  control (P13). A Ser-type CAG tRNA on a telomere-capped *Euplotes* contig would be a
+  candidate; finding only Leu-type CUG readers while the controls pass would mean P10K's
+  table-12 label is not supported at the tRNA level (P14). This test is independent of the
+  Codetta test in A6.4.
 - **Stage 2:** the screen itself, with every candidate checked against a second sample,
   contamination, the literature and a second assembly. It starts only if the pilot's P1 and P2
   hold (and, for transcriptomes, P5 and P6).
@@ -73,7 +83,8 @@ No eukcode job has produced output yet; every result below is still pending.
 ```
 pip install -r requirements.txt
 bash install_codetta.sh          # clones and builds Codetta 2.0 + HMMER 3.3.2 (GPL-3.0, not bundled)
-python -m unittest -v test_codes test_fasta test_fasta_stream test_codetta_io test_ncbi_grade test_known test_shards test_tsa test_tsa_pilot test_support test_cug
+bash install_trnascan.sh         # fetches tRNAscan-SE 2.0.12 (GPL-3.0) + Infernal 1.1.5 (BSD), not bundled
+python -m unittest -v test_codes test_fasta test_fasta_stream test_codetta_io test_ncbi_grade test_known test_shards test_tsa test_tsa_pilot test_support test_cug test_trna
 python run_pilot.py --data-dir data --out-dir out            # stage 1
 python make_shards.py out/census_species.csv shards --per-shard 30
 python run_screen.py --shard shards/shard_00.csv --data-dir data --out-dir out-s00 --cap-mb 2
@@ -82,6 +93,7 @@ python run_tsa.py controls --data-dir data --out-dir out-tctl --cap-mb 2   # tra
 python run_tsa.py screen --census out-tsa/tsa_species.csv --shard-index 0 --data-dir data --out-dir out-t00
 python run_check2.py demo --cases check2_a6.json --data-dir data --out-dir out-c2demo   # check 2 validation (P8-P10)
 python run_check2.py demo --cases check2_cug.json --data-dir data --out-dir out-cug     # Euplotes CUG test (A6.4)
+python run_trna.py --cases trna_cases.json --out-dir out-trna --threads 2               # tRNA test (A7)
 python run_check2.py records --records-dir out-t00/species --data-dir data --out-dir out-c2
 ```
 
@@ -93,7 +105,9 @@ TSA census writes `tsa_sets.csv`, `tsa_species.csv`, `tsa_skipped.csv`,
 `tsa_controls_resolved.csv` and `tsa_census_summary.json`. The transcriptome control pilot
 writes `TSA_PILOT.md`, `tsa_pilot.json`, `tsa_controls_resolved.csv` and the screen tables.
 Check 2 writes `CHECK2.md`, `check2_summary.json` and one `check2/<case>.json` per case, with
-every searched sequence, its best hit and its class.
+every searched sequence, its best hit and its class. The tRNA test writes `TRNA_RESULT.md`,
+`trna_results.json` (grades P12-P15 and every CUG-reading tRNA with its isotype score, contig,
+telomere flag and structure) and tRNAscan-SE's raw output per input in `raw/`.
 
 ## Candidate classes (eukcode/known.py)
 
@@ -122,10 +136,20 @@ standard genetic code*, Current Biology 35:R1104).
   sequence*, Bioinformatics 2023. https://github.com/kshulgina/codetta (GPL-3.0). It is called
   as an external program and not redistributed. Check 2 reads its alignment output format as
   written by `codetta.py` 2.0.
+- tRNAscan-SE 2.0: P. P. Chan, B. Y. Lin, A. J. Mak and T. M. Lowe, *tRNAscan-SE 2.0: improved
+  detection and functional classification of transfer RNA genes*, Nucleic Acids Res 2021
+  (GPL-3.0), with Infernal 1.1.5 (E. P. Nawrocki and S. R. Eddy, BSD). Called as external
+  programs and not redistributed. GtRNAdb (Chan & Lowe) for the calibration tRNA.
 - Prior screens: E. C. Swart et al., *Genetic codes with no dedicated stop codon*, Cell 2016;
   S. M. Heaphy et al., Mol Biol Evol 2016; W. Chen et al., *Stop or not: genome-wide profiling
   of reassigned stop codons in ciliates*, Mol Biol Evol 2023; B. McGowan et al., PLoS Genet
-  2024; X. Gao et al., *The P10K database*, Nucleic Acids Res 2024.
+  2024; X. Gao et al., *The P10K database*, Nucleic Acids Res 2024; S. A. Gaydukova et al.,
+  *Nontriplet feature of genetic code in Euplotes ciliates is a result of neutral evolution*,
+  PNAS 2023 (the GKLJ01 transcriptome).
+- Genomes: *E. focardii* TN1 (*The macronuclear genome of the Antarctic psychrophilic marine
+  ciliate Euplotes focardii reveals new insights on molecular cold adaptation*, Sci Rep 2021,
+  PMC8455672), *E. woodruffi* Iz01, *E. aediculatus*
+  QDEA, *C. albicans* SC5314, *D. hansenii* CBS767, *T. thermophila* SB210 (NCBI Datasets).
 - MMETSP re-assemblies: EBI/ELIXIR and Roscoff Biological Station, INSDC projects PRJEB37117 and
   PRJEB37159.
 - HMMER (BSD-3-Clause), Pfam (CC0), NCBI Datasets and E-utilities, ENA portal API, INSDC TSA

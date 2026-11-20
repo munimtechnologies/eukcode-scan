@@ -1,0 +1,13 @@
+{
+ "about": "A7 tRNA test of P10K's Euplotes CUG label (PREREGISTRATION_A7.md). Roles: positive = known nuclear CUG-Ser yeast (P12); negative = ciliate that reads CUG as Leu (P13); main = Euplotes focardii strain TN1 genome (P14); euplotes = other Euplotes genomes (P15); transcriptome = the two TN1 transcriptomes (secondary, A7.5). Run in this order. Accessions checked against NCBI Datasets and ENA on 2026-11-20.",
+ "cases": [
+  {"label": "calb", "role": "positive", "kind": "genome", "accession": "GCA_000182965.3", "organism": "Candida albicans SC5314"},
+  {"label": "dhan", "role": "positive", "kind": "genome", "accession": "GCA_000006445.2", "organism": "Debaryomyces hansenii CBS767"},
+  {"label": "efoc", "role": "main", "kind": "genome", "accession": "GCA_001880345.2", "organism": "Euplotes focardii TN1"},
+  {"label": "tthe", "role": "negative", "kind": "genome", "accession": "GCA_000189635.1", "organism": "Tetrahymena thermophila SB210"},
+  {"label": "gklj", "role": "transcriptome", "kind": "tsa", "accession": "GKLJ01000000", "organism": "Euplotes focardii TN1 (2023 sequencing, PRJNA896607)"},
+  {"label": "hbjk", "role": "transcriptome", "kind": "tsa", "accession": "HBJK01000000", "organism": "Euplotes focardii TN1 (2021 EBI re-assembly of MMETSP0205 reads)"},
+  {"label": "ewoo", "role": "euplotes", "kind": "genome", "accession": "GCA_027382605.1", "organism": "Euplotes woodruffi Iz01"},
+  {"label": "eaed", "role": "euplotes", "kind": "genome", "accession": "GCA_030463445.1", "organism": "Euplotes aediculatus QDEA"}
+ ]
+}
