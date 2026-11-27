@@ -1,0 +1,24 @@
+{
+  "addendum": "A8",
+  "registered": "2026-11-27",
+  "kaci_repo": "https://github.com/artmeln/lib-kaci",
+  "kaci_commit": "cc8601f2121ddb2546b69c5d494652c38294c02a",
+  "kaci_licence": "MIT (lib-kaci, Artem V. Melnykov)",
+  "reference": {
+    "doi": "10.5281/zenodo.19318166",
+    "url": "https://zenodo.org/api/records/19318166/files/ref_k11_link20.tar.gz/content",
+    "file": "ref_k11_link20.tar.gz",
+    "bytes": 2169547436,
+    "md5": "6149c67b184cfb053bc11d44bf9b1778",
+    "licence": "CC-BY-4.0"
+  },
+  "params": {"kmer_size": 11, "max_query_count": 2, "min_n": 3, "high_conf": 0.9999},
+  "controls": [
+    {"id": "P16", "accession": "GCF_000146045.2", "organism": "Saccharomyces cerevisiae S288C", "table": 1, "must": {"CTG": "L"}},
+    {"id": "P17", "accession": "GCF_000002945.2", "organism": "Schizosaccharomyces pombe 972h-", "table": 1, "must": {}},
+    {"id": "P18", "accession": "GCF_000002765.6", "organism": "Plasmodium falciparum 3D7", "table": 1, "must": {}},
+    {"id": "P19", "accession": "GCA_001661245.1", "organism": "Pachysolen tannophilus NRRL Y-2460", "table": 26, "must": {"CTG": "A"}},
+    {"id": "P20", "accession": "GCF_000182965.3", "organism": "Candida albicans SC5314", "table": 12, "must": {"CTG": "S"}},
+    {"id": "P21", "accession": "GCF_000189635.1", "organism": "Tetrahymena thermophila SB210", "table": 6, "must": {"TAA": "Q", "TAG": "Q"}}
+  ]
+}
